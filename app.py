@@ -11,18 +11,10 @@ slack_signing_secret = os.environ["SLACK_SIGNING_SECRET"]
 slack_events_adapter = SlackEventAdapter(slack_signing_secret, "/slack/events", app)
 slack_bot_token = os.environ["SLACK_BOT_TOKEN"]
 slack_workspace_token = os.environ["SLACK_WORKSPACE_TOKEN"]
+
+
 slack_client = SlackClient(slack_bot_token)
-    #refresh_token=slack_refresh_token,
-    #client_id=slack_client_id,
-    #client_secret=slack_client_secret,
-    #token_update_callback=token_update_callback)
-
-
-def token_update_callback(update_data):
-    print("Enterprise ID: {}".format(update_data["enterprise_id"]))
-    print("Workspace ID: {}".format(update_data["team_id"]))
-    print("Access Token: {}".format(update_data["access_token"]))
-    print("Access Token expires in (ms): {}".format(update_data["expires_in"]))
+workspace_client = SlackClient(slack_workspace_token)
 
 # Example responder to greetings
 @slack_events_adapter.on("message")
@@ -43,7 +35,6 @@ def mention_bot(data):
     event = data["event"]
     user= event["user"]
     channel = event["channel"]
-    print("User/Channel: " + user + "/"+channel)
     dm_data = slack_client.api_call(
         "conversations.open",
         users="{}".format(user))
@@ -103,27 +94,6 @@ def error_handler(err):
     print("ERROR: " + str(err))
 
 
-@app.route("/message_options", methods=["POST"])
-def message_options():
-    # Parse the request payload
-    form_json = json.loads(request.form["payload"])
-
-    # Dictionary of menu options which will be sent as JSON
-    menu_options = {
-        "options": [
-            {
-                "text": "Cappuccino",
-                "value": "cappuccino"
-            },
-            {
-                "text": "Latte",
-                "value": "latte"
-            }
-        ]
-    }
-
-    # Load options dict as JSON and respond to Slack
-    return Response(json.dumps(menu_options), mimetype='application/json')
 
 @app.route("/message_actions", methods=["POST"])
 def message_actions():
@@ -139,23 +109,88 @@ def message_actions():
     return make_response("", 200)
 
 
+def join_team_group(team, user, chan):
+    teams = {
+    "1334":"SEL463XC7",
+    "1374":"SEJV40TMZ",
+    }
+    users_list = workspace_client.api_call(
+        "usergroups.users.list",
+        usergroup=teams[team],
+        include_disabled=False)
+
+    users = users_list["users"]
+
+    if user in users:
+        slack_client.api_call(
+        "chat.postMessage",
+        channel = chan,
+        text = "You're already on Team {0}!".format(team),
+        attachments = [])
+        return
+
+    users.append(user)
+
+    workspace_client.api_call(
+        "usergroups.users.update",
+        usergroup=teams[team],
+        users=','.join(users))
+
+    slack_client.api_call(
+        "chat.postMessage",
+        channel = chan,
+        text = "Awesome! Welcome to Team {0}!".format(team),
+        attachments = [])
+
+def get_team_roster(team):
+    teams = {
+    "1334":"SEL463XC7",
+    "1374":"SEJV40TMZ",
+    }
+    users_list = workspace_client.api_call(
+        "usergroups.users.list",
+        usergroup=teams[team],
+        include_disabled=False)
+    return users_list["users"]
+
 def join_subteam(subteam, user, chan):
 
+    
     subteams = {
-    "build":"",
-    "design":"",
-    "programming":"",
-    "electrical":"",
-    "media":"",
-    "awards":"",
-    "scouting":"",
-    "business":"",
+    "build34":"SEK772S10",
+    "build74":"SEJJRD333",
+    "design34":"SEK2TQV3M",
+    "design74":"SEL7C1BF1",
+    "programming34":"SEKBL4BHB",
+    "programming74":"SEK5RMHUJ",
+    "electrical34":"SEKBS2FHT",
+    "electrical74":"SEK0YV0CU",
+    "media34":"SEK1X8EG3",
+    "media74":"SELGRRDGW",
+    "awards34":"SEK0DDDHA",
+    "awards74":"SEK711EMQ",
+    "scouting34":"SEK29Q42G",
+    "scouting74":"SEK71SA5Q",
+    "business34":"SEKH80292",
+    "business74":"SEKH80292",
     }
 
-    users = slack_client.api_call(
+    list_1334 = get_team_roster("1334")
+    list_1374 = get_team_roster("1374")
+    team = ""
+    if user in list_1374:
+        team  = "74"
+    elif user in list_1334:
+        team = "34"
+
+    subteam_team = subteam + team
+
+    users_list = workspace_client.api_call(
         "usergroups.users.list",
-        usergroup=subteams[subteam],
-        include_disabled=False)["users"]
+        usergroup=subteams[subteam_team],
+        include_disabled=False)
+
+    users = users_list["users"]
 
     if user in users:
         slack_client.api_call(
@@ -167,10 +202,9 @@ def join_subteam(subteam, user, chan):
 
     users.append(user)
 
-    slack_client.api_call(
+    workspace_client.api_call(
         "usergroups.users.update",
-        token=slack_workspace_token,
-        usergroup=subteams[subteam],
+        usergroup=subteams[subteam_team],
         users=','.join(users))
 
     slack_client.api_call(
@@ -183,7 +217,6 @@ def team_selection_flow(form_json, selection_name, selection):
     user = form_json["user"]["id"]
     chan = form_json["channel"]["id"]
 
-    print(user)
     if selection_name == "team":
         team_choice = selection
         if team_choice == "neither":
@@ -195,12 +228,9 @@ def team_selection_flow(form_json, selection_name, selection):
                   attachments=[]
                 )
             return make_response("", 200)
-        elif team_choice == "1334":
-            print("1334 chosen")
-            # Set user group
-        elif team_choice == "1374":
-            print("1374 chosen")
-            # Set user group
+        else:
+            join_team_group(team_choice, user, chan)
+
         response = slack_client.api_call(
               "chat.update",
               channel=form_json["channel"]["id"],
@@ -310,7 +340,6 @@ def team_selection_flow(form_json, selection_name, selection):
             )
         else:
             subteam_choice = selection
-            print("Subteam: " + subteam_choice)
             join_subteam(subteam_choice, user, chan)
             response = slack_client.api_call(
                   "chat.update",
