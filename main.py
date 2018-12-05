@@ -16,16 +16,6 @@ slack_workspace_token = os.environ["SLACK_WORKSPACE_TOKEN"]
 slack_client = SlackClient(slack_bot_token)
 workspace_client = SlackClient(slack_workspace_token)
 
-# Example responder to greetings
-@slack_events_adapter.on("message")
-def handle_message(event_data):
-    message = event_data["event"]
-    # If the incoming message contains "hi", then respond with a "Hello" message
-    if message.get("subtype") is None and "hi" in message.get('text'):
-        channel = message["channel"]
-        message = "Hello <@%s>! :tada:" % message["user"]
-        slack_client.api_call("chat.postMessage", channel=channel, text=message)
-
 @slack_events_adapter.on("team_join")
 def team_join(data):
     mention_bot(data)
@@ -270,7 +260,7 @@ def team_selection_flow(form_json, selection_name, selection):
                         },
                         {
                             "name": "subteam",
-                            "text": "No Thanks",
+                            "text": "Done",
                             "style": "danger",
                             "type": "button",
                             "value": "none"
@@ -315,13 +305,50 @@ def team_selection_flow(form_json, selection_name, selection):
                                 },
                                 {
                                     "name": "subteam",
+                                    "text": "Other...",
+                                    "type": "button",
+                                    "value": "other2"
+                                },
+                                {
+                                    "name": "subteam",
+                                    "text": "Done",
+                                    "style": "danger",
+                                    "type": "button",
+                                    "value": "none"
+                                }    
+                        ]
+                    }
+                ] # empty `attachments` to clear the existing massage attachments
+            )
+        elif subteam_choice == "other2":
+            response = slack_client.api_call(
+                  "chat.update",
+                  channel=form_json["channel"]["id"],
+                  ts=form_json["message_ts"],
+                  text="You can choose any subteams you'd like to join below.",
+                  attachments=[
+                    {
+                        "text": "Choose a subteam",
+                        "fallback": "You are unable to choose a subteam",
+                        "callback_id": "subteam_choice",
+                        "color": "#3AA3E3",
+                        "attachment_type": "default",
+                        "actions": [
+                            {
+                                    "name": "subteam",
+                                    "text": "Build",
+                                    "type": "button",
+                                    "value": "build"
+                                },
+                                {
+                                    "name": "subteam",
                                     "text": "Media",
                                     "type": "button",
                                     "value": "media"
                                 },
                                 {
                                     "name": "subteam",
-                                    "text": "No Thanks",
+                                    "text": "Done",
                                     "style": "danger",
                                     "type": "button",
                                     "value": "none"
@@ -380,7 +407,7 @@ def team_selection_flow(form_json, selection_name, selection):
                             },
                             {
                                 "name": "subteam",
-                                "text": "No Thanks",
+                                "text": "Done",
                                 "style": "danger",
                                 "type": "button",
                                 "value": "none"
