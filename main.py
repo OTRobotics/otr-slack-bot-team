@@ -109,7 +109,7 @@ def message_actions():
 
     team_selection_flow(form_json, selection_name, selection)
     # Send an HTTP 200 response with empty body so Slack knows we're done here
-    return json.dumps({'success':True}), 200, {'ContentType':'application/json'}
+    return make_response("", 200)
 
 def join_team_group(team, user, chan):
     teams = {
@@ -229,7 +229,7 @@ def team_selection_flow(form_json, selection_name, selection):
                   text="Indecision is okay!",
                   attachments=[]
                 )
-            return json.dumps({'success':True}), 200, {'ContentType':'application/json'}
+            return make_response("", 200)
         else:
             join_team_group(team_choice, user, chan)
 
