@@ -1,9 +1,16 @@
 from slackeventsapi import SlackEventAdapter
 from slackclient import SlackClient
-from flask import Flask, request, make_response, Response
+from flask import Flask
 import os
 import json
 import pprint
+import ssl
+import logging
+import requests_toolbelt.adapters.appengine
+
+# Use the App Engine Requests adapter. This makes sure that Requests uses
+# URLFetch.
+requests_toolbelt.adapters.appengine.monkeypatch()
 
 app = Flask(__name__)
 
@@ -11,7 +18,6 @@ slack_signing_secret = os.environ["SLACK_SIGNING_SECRET"]
 slack_events_adapter = SlackEventAdapter(slack_signing_secret, "/slack/events", app)
 slack_bot_token = os.environ["SLACK_BOT_TOKEN"]
 slack_workspace_token = os.environ["SLACK_WORKSPACE_TOKEN"]
-
 
 slack_client = SlackClient(slack_bot_token)
 workspace_client = SlackClient(slack_workspace_token)
@@ -22,18 +28,21 @@ def team_join(data):
 
 @slack_events_adapter.on("app_mention")
 def mention_bot(data):
+    logging.info(data)
     event = data["event"]
     user= event["user"]
     channel = event["channel"]
+    logging.info(event)
+    logging.info(user)
     dm_data = slack_client.api_call(
         "conversations.open",
-        users="{}".format(user))
+        users="{0}".format(user))
 
     if dm_data["ok"] == True:
         channel = dm_data["channel"]["id"]
         welcome_message(channel)
     else:
-        print(dm_data["error"])
+        logging.error(dm_data["error"])
 
 def welcome_message(chan = "CEJFLVBKJ"):
     #CEJFLVBKJ is test channel
@@ -84,6 +93,10 @@ def error_handler(err):
     print("ERROR: " + str(err))
 
 
+@app.route("/")
+def rootMessage():
+    return "Hi"
+
 
 @app.route("/message_actions", methods=["POST"])
 def message_actions():
@@ -96,8 +109,7 @@ def message_actions():
 
     team_selection_flow(form_json, selection_name, selection)
     # Send an HTTP 200 response with empty body so Slack knows we're done here
-    return make_response("", 200)
-
+    return json.dumps({'success':True}), 200, {'ContentType':'application/json'}
 
 def join_team_group(team, user, chan):
     teams = {
@@ -145,7 +157,7 @@ def get_team_roster(team):
 
 def join_subteam(subteam, user, chan):
 
-    
+
     subteams = {
     "build34":"SEK772S10",
     "build74":"SEJJRD333",
@@ -217,7 +229,7 @@ def team_selection_flow(form_json, selection_name, selection):
                   text="Indecision is okay!",
                   attachments=[]
                 )
-            return make_response("", 200)
+            return json.dumps({'success':True}), 200, {'ContentType':'application/json'}
         else:
             join_team_group(team_choice, user, chan)
 
@@ -315,7 +327,7 @@ def team_selection_flow(form_json, selection_name, selection):
                                     "style": "danger",
                                     "type": "button",
                                     "value": "none"
-                                }    
+                                }
                         ]
                     }
                 ] # empty `attachments` to clear the existing massage attachments
@@ -352,7 +364,7 @@ def team_selection_flow(form_json, selection_name, selection):
                                     "style": "danger",
                                     "type": "button",
                                     "value": "none"
-                                }    
+                                }
                         ]
                     }
                 ] # empty `attachments` to clear the existing massage attachments
@@ -419,6 +431,6 @@ def team_selection_flow(form_json, selection_name, selection):
 
 
 # Flask server on port 3000
-if __name__ == "__main__":
-    app.run(port=3000)
+#if __name__ == "__main__":
+#    app.run(port=3000)
 
